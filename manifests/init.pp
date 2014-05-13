@@ -1,4 +1,6 @@
-# This is a placeholder class.
+# Install Maven
 class maven {
-  anchor { 'Hello_World': }
+  package { 'maven':
+    ensure => 'present',
+  }
 }
