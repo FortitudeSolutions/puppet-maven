@@ -2,6 +2,7 @@
 class maven::settings ( $home = undef,
   $master_password = undef,
   $local_repository = undef,
+  $password_file = undef,
   $local_profile_name = 'default',
   $mirrors  = [],
   $repos    = [],
@@ -29,11 +30,23 @@ class maven::settings ( $home = undef,
   } else {
   	notify {"No master password defined":}
   }
-  notify {"SERVERS ${servers}":}
-  notify {"master password is ${master_password}":}
 
   file { "${home}/.m2/settings.xml":
     ensure    => 'present',
     content   => template('maven/settings.xml.erb'),
+  }
+
+  file { '/tmp/mvn_passwd':
+    ensure => 'present',
+    source => 'puppet:///modules/maven/append_mvn_encryptedpass.sh',
+    mode => '0755',
+    backup => 'false'
+  }
+
+  # clean up empty passwords
+  exec { 'add_passwords':
+    command => "/tmp/mvn_passwd ${password_file}",
+    path => ['/bin','/usr/bin'],
+    require => [File['/tmp/mvn_passwd'],File["${home}/.m2/settings.xml"]]
   }
 }
