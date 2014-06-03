@@ -46,7 +46,7 @@ class maven::settings ( $home = undef,
   # clean up empty passwords
   exec { 'add_passwords':
     command => "/tmp/mvn_passwd ${password_file}",
-    path => ['/bin','/usr/bin'],
+    path => ['/bin','/usr/bin','/opt/boxen/homebrew/bin'],
     require => [File['/tmp/mvn_passwd'],File["${home}/.m2/settings.xml"]]
   }
 }
