@@ -10,6 +10,11 @@ class maven::settings ( $home = undef,
   $servers  = [],
   $proxies  = [],) {
 
+  exec {"passfile_exists":
+    command => 'true',
+    onlyif  => "test -e ${password_file}",
+  }
+
   file { "${home}/.m2":
     ensure => "directory",
     owner  => "${::luser}",
@@ -34,19 +39,21 @@ class maven::settings ( $home = undef,
   file { "${home}/.m2/settings.xml":
     ensure    => 'present',
     content   => template('maven/settings.xml.erb'),
+    replace   => 'no',
   }
 
   file { '/tmp/mvn_passwd':
     ensure => 'present',
     source => 'puppet:///modules/maven/append_mvn_encryptedpass.sh',
     mode => '0755',
-    backup => 'false'
+    backup => 'false',
+    require => Exec["passfile_exists"]
   }
 
   # clean up empty passwords
   exec { 'add_passwords':
     command => "/tmp/mvn_passwd ${password_file}",
     path => ['/bin','/usr/bin','/opt/boxen/homebrew/bin'],
-    require => [File['/tmp/mvn_passwd'],File["${home}/.m2/settings.xml"]]
+    require => [File['/tmp/mvn_passwd'],File["${home}/.m2/settings.xml"],Exec["passfile_exists"]]
   }
 }
