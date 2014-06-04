@@ -1,6 +1,5 @@
 # Create a maven settings file
 class maven::settings ( $home = undef,
-  $master_password = undef,
   $local_repository = undef,
   $password_file = undef,
   $local_profile_name = 'default',
@@ -14,6 +13,7 @@ class maven::settings ( $home = undef,
     command => 'true',
     onlyif  => "test -e ${password_file}",
   }
+  exec {"test -e ${password_file}":}
 
   file { "${home}/.m2":
     ensure => "directory",
@@ -25,15 +25,18 @@ class maven::settings ( $home = undef,
   	$local_repo = "${home}/.m2/repository"
   }
 
-  if $master_password != undef {
-    file { "${home}/.m2/settings-security.xml":
-      ensure  => 'present',
-      content => template('maven/settings-security.xml.erb'),
-      mode    => '0600',
-      replace => 'no',
-    }
-  } else {
-  	notify {"No master password defined":}
+  file {'/tmp/create_mvn_security':
+    ensure => 'present',
+    source => 'puppet:///modules/maven/create_settings_security.sh',
+    mode   => '0755',
+    backup => 'false'
+  }
+
+  exec {"settings-security":
+    command =>  '/tmp/create_mvn_security',
+    path    => ['/bin','/usr/bin','/opt/boxen/homebrew/bin'],
+    unless  => 'test -e ~/.m2/settings-security.xml',
+    require => File['/tmp/create_mvn_security']
   }
 
   file { "${home}/.m2/settings.xml":
@@ -47,13 +50,13 @@ class maven::settings ( $home = undef,
     source => 'puppet:///modules/maven/append_mvn_encryptedpass.sh',
     mode => '0755',
     backup => 'false',
-    require => Exec["passfile_exists"]
+    require => [Exec["test -e ${password_file}"],Exec["settings-security"]]
   }
 
   # clean up empty passwords
   exec { 'add_passwords':
     command => "/tmp/mvn_passwd ${password_file}",
     path => ['/bin','/usr/bin','/opt/boxen/homebrew/bin'],
-    require => [File['/tmp/mvn_passwd'],File["${home}/.m2/settings.xml"],Exec["passfile_exists"]]
+    require => [File['/tmp/mvn_passwd'],File["${home}/.m2/settings.xml"],Exec["test -e ${password_file}"]]
   }
 }
