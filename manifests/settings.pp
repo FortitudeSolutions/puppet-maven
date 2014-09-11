@@ -1,62 +1,62 @@
 # Create a maven settings file
-class maven::settings ( $home = undef,
-  $local_repository = undef,
-  $password_file = undef,
-  $local_profile_name = 'default',
-  $mirrors  = [],
-  $repos    = [],
-  $properties = [],
-  $servers  = [],
-  $proxies  = [],) {
+class maven::settings ( $password_file = undef ) {
 
-  exec {"passfile_exists":
-    command => 'true',
-    onlyif  => "test -e ${password_file}",
-  }
-  exec {"test -e ${password_file}":}
+  $created_file = "/var/db/.puppet_exec_installed_maven_settings"
 
-  file { "${home}/.m2":
+  file { "${homedir}/.m2":
     ensure => "directory",
     owner  => "${::luser}",
-    mode  => '700'
+    mode  => "700",
+    cwd   => "${homedir}",
+    refreshonly => true
   }
 
-  if $local_repository == undef {
-  	$local_repo = "${home}/.m2/repository"
+  file { "/tmp/create_mvn_security":
+    ensure => "present",
+    source => "puppet:///modules/maven/create_settings_security.sh",
+    mode   => "0755",
+    backup => "false",
+    refreshonly => true 
   }
 
-  file {'/tmp/create_mvn_security':
-    ensure => 'present',
-    source => 'puppet:///modules/maven/create_settings_security.sh',
-    mode   => '0755',
-    backup => 'false'
+  exec { "settings-security":
+    command =>  "/tmp/create_mvn_security",
+    require => [File["${homedir}/.m2"], File["/tmp/create_mvn_security"]]
+    refreshonly => true
   }
 
-  exec {"settings-security":
-    command =>  '/tmp/create_mvn_security',
-    path    => ['/bin','/usr/bin','/opt/boxen/homebrew/bin'],
-    unless  => 'test -e ~/.m2/settings-security.xml',
-    require => File['/tmp/create_mvn_security']
+  file { "${homedir}/.m2/settings.xml":
+    ensure    => "present",
+    content   => template("maven/settings.xml.erb"),
+    replace   => "no",
+    refreshonly => true
   }
 
-  file { "${home}/.m2/settings.xml":
-    ensure    => 'present',
-    content   => template('maven/settings.xml.erb'),
-    replace   => 'no',
+  file { "/tmp/mvn_passwd":
+    ensure => "present",
+    source => "puppet:///modules/maven/append_mvn_encryptedpass.sh",
+    mode => "0755",
+    backup => "false",
+    refreshonly => true
   }
 
-  file { '/tmp/mvn_passwd':
-    ensure => 'present',
-    source => 'puppet:///modules/maven/append_mvn_encryptedpass.sh',
-    mode => '0755',
-    backup => 'false',
-    require => [Exec["test -e ${password_file}"],Exec["settings-security"]]
+  exec { "passfile_exists":
+    command => "test -e ${password_file}",
+    refreshonly => true
   }
 
   # clean up empty passwords
-  exec { 'add_passwords':
+  exec { "add_passwords":
     command => "/tmp/mvn_passwd ${password_file}",
-    path => ['/bin','/usr/bin','/opt/boxen/homebrew/bin'],
-    require => [File['/tmp/mvn_passwd'],File["${home}/.m2/settings.xml"],Exec["test -e ${password_file}"]]
+    require => [Exec["settings-security"], File["${homedir}/.m2/settings.xml"], File["/tmp/mvn_passwd"], Exec["passfile_exists"]]
+    refreshonly => true
   }
+
+  # only execute the chain if the created file is absent
+  exec { "maven_settings":
+    command => "touch $created_file",
+    creates => $created_file,
+    require => Exec["add_passwords"]
+  }
+
 }
